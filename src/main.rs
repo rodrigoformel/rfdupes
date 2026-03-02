@@ -27,6 +27,10 @@ struct Args {
     /// Exibe tamanho em Bytes, KB ou MB (-s B ou --size B, ou -s K ou --size K, ou -s M ou --size M)
     #[arg(short, long, default_value = "M")]
     size: String,
+
+    /// Salva o relatório em um arquivo (-f <nome_do_arquivo> ou --file <nome_do_arquivo>)
+    #[arg(short, long, default_value = "duplicate.txt")]
+    filename: String,
 }
 
 fn main() -> io::Result<()> {
@@ -79,9 +83,55 @@ fn main() -> io::Result<()> {
     // Ordena os grupos com base no primeiro caminho de cada um
     duplicates.sort_by(|a, b| a.1.first().unwrap().cmp(b.1.first().unwrap()));
 
+    if args.filename.len() > 1 {
+        print_progress_file(&duplicates, size_limit, size_suffix, &args.filename)?;
+    } else {
+        print_progress(&duplicates, size_limit, size_suffix)?;
+    }
+
+    Ok(())
+}
+
+fn print_progress(
+    duplicates: &[(u64, Vec<PathBuf>)],
+    size_limit: u64,
+    size_suffix: &str,
+) -> io::Result<()> {
     // 3. Gera o relatório
-    let output_file = "duplicados.txt";
-    let mut file = File::create(output_file)?;
+
+    println!("Relatório de Arquivos Duplicados");
+    println!("================================");
+
+    for (i, (size, group)) in duplicates.iter().enumerate() {
+        let size_formatted = *size as f64 / (size_limit as f64);
+        println!(           
+            "\nGrupo {} (Tamanho: {:.2} {}):",
+            i + 1,
+            size_formatted,
+            size_suffix
+        );
+        for path in group {
+            println!(" - {}", path.display());
+        }
+    }
+
+    println!(
+        "Encontrados {} grupos de arquivos repetidos.",
+        duplicates.len()
+    );
+    println!("\n");
+
+    Ok(())
+}
+
+fn print_progress_file(
+    duplicates: &[(u64, Vec<PathBuf>)],
+    size_limit: u64,
+    size_suffix: &str,
+    filename: &str,
+) -> io::Result<()> {
+    // 3. Gera o relatório
+    let mut file = File::create(filename)?;
 
     writeln!(file, "Relatório de Arquivos Duplicados")?;
     writeln!(file, "================================")?;
@@ -104,10 +154,10 @@ fn main() -> io::Result<()> {
         "Encontrados {} grupos de arquivos repetidos.",
         duplicates.len()
     );
-    println!("Relatório salvo em: {}", output_file);
+    println!("Relatório salvo em: {}", filename);
 
     Ok(())
-}
+}   
 
 fn collect_files(
     dir: &Path,
