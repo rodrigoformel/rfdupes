@@ -4,7 +4,7 @@ use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 
-// Apagar se retirar a verificação de hash
+// Apagar se retirar a verificação de hash ou implementar BD.
 //use sha2::{Digest, Sha256};
 
 /// Busca por arquivos duplicados em uma árvore de diretórios
