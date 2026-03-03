@@ -3,6 +3,12 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{
+    atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering},
+    Arc,
+};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 // Apagar se retirar a verificação de hash ou implementar BD.
 //use sha2::{Digest, Sha256};
@@ -29,8 +35,62 @@ struct Args {
     size: String,
 
     /// Salva o relatório em um arquivo (-f <nome_do_arquivo> ou --file <nome_do_arquivo>)
-    #[arg(short, long, default_value = "duplicate.txt")]
-    filename: String,
+    #[arg(short, long)]
+    filename: Option<String>,
+
+    /// Não exibe spinner nem mensagens auxiliares no terminal (-q / --quiet)
+    #[arg(short, long, default_value_t = false)]
+    quiet: bool,
+}
+
+struct SpinnerGuard {
+    stop: Arc<AtomicBool>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl SpinnerGuard {
+    fn start(processed: Arc<AtomicUsize>, phase: Arc<AtomicU8>) -> Self {
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_thread = Arc::clone(&stop);
+
+        let handle = thread::spawn(move || {
+            const FRAMES: [char; 4] = ['|', '/', '-', '\\'];
+            let mut i = 0usize;
+
+            while !stop_thread.load(Ordering::Relaxed) {
+                let n = processed.load(Ordering::Relaxed);
+                let phase_str = match phase.load(Ordering::Relaxed) {
+                    0 => "Coletando arquivos",
+                    1 => "Comparando conteúdo",
+                    _ => "Trabalhando",
+                };
+
+                eprint!("\r{} {}... ({} arquivos)", FRAMES[i % FRAMES.len()], phase_str, n);
+                let _ = io::stderr().flush();
+
+                i = i.wrapping_add(1);
+                thread::sleep(Duration::from_millis(120));
+            }
+
+            // Limpa a linha do spinner
+            eprint!("\r{: <80}\r", "");
+            let _ = io::stderr().flush();
+        });
+
+        Self {
+            stop,
+            handle: Some(handle),
+        }
+    }
+}
+
+impl Drop for SpinnerGuard {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
 }
 
 fn main() -> io::Result<()> {
@@ -50,15 +110,28 @@ fn main() -> io::Result<()> {
     };
 
     let start_path = fs::canonicalize(args.input)?;
-    println!("Analisando diretório: {}", start_path.display());
+    if !args.quiet {
+        println!("Analisando diretório: {}", start_path.display());
+    }
 
     // 1. Coleta arquivos agrupados por tamanho
     let mut files_by_size: HashMap<u64, Vec<PathBuf>> = HashMap::new();
-    let mut count = 0;
-    collect_files(&start_path, &mut files_by_size, &mut count)?;
+    let processed = Arc::new(AtomicUsize::new(0));
+    let phase = Arc::new(AtomicU8::new(0));
+    let _spinner = if args.quiet {
+        None
+    } else {
+        Some(SpinnerGuard::start(
+            Arc::clone(&processed),
+            Arc::clone(&phase),
+        ))
+    };
+
+    collect_files(&start_path, &mut files_by_size, &processed)?;
 
     // 2. Verifica conteúdo para arquivos com mesmo tamanho
     let mut duplicates: Vec<(u64, Vec<PathBuf>)> = Vec::new();
+    phase.store(1, Ordering::Relaxed);
 
     for (size, paths) in files_by_size {
         if paths.len() > 1 {
@@ -83,10 +156,13 @@ fn main() -> io::Result<()> {
     // Ordena os grupos com base no primeiro caminho de cada um
     duplicates.sort_by(|a, b| a.1.first().unwrap().cmp(b.1.first().unwrap()));
 
-    if args.filename.len() > 1 {
-        print_progress_file(&duplicates, size_limit, size_suffix, &args.filename)?;
-    } else {
-        print_progress(&duplicates, size_limit, size_suffix)?;
+    match args.filename {
+        Some(ref name) => {
+            print_progress_file(&duplicates, size_limit, size_suffix, name, args.quiet)?;
+        }
+        None => {
+            print_progress(&duplicates, size_limit, size_suffix, args.quiet)?;
+        }
     }
 
     Ok(())
@@ -96,9 +172,9 @@ fn print_progress(
     duplicates: &[(u64, Vec<PathBuf>)],
     size_limit: u64,
     size_suffix: &str,
+    quiet: bool,
 ) -> io::Result<()> {
     // 3. Gera o relatório
-
     println!("Relatório de Arquivos Duplicados");
     println!("================================");
 
@@ -115,11 +191,13 @@ fn print_progress(
         }
     }
 
-    println!(
-        "Encontrados {} grupos de arquivos repetidos.",
-        duplicates.len()
-    );
-    println!("\n");
+    if !quiet {
+        println!(
+            "Encontrados {} grupos de arquivos repetidos.",
+            duplicates.len()
+        );
+        println!("\n");
+    }
 
     Ok(())
 }
@@ -129,6 +207,7 @@ fn print_progress_file(
     size_limit: u64,
     size_suffix: &str,
     filename: &str,
+    quiet: bool,
 ) -> io::Result<()> {
     // 3. Gera o relatório
     let mut file = File::create(filename)?;
@@ -150,11 +229,13 @@ fn print_progress_file(
         }
     }
 
-    println!(
-        "Encontrados {} grupos de arquivos repetidos.",
-        duplicates.len()
-    );
-    println!("Relatório salvo em: {}", filename);
+    if !quiet {
+        println!(
+            "Encontrados {} grupos de arquivos repetidos.",
+            duplicates.len()
+        );
+        println!("Relatório salvo em: {}", filename);
+    }
 
     Ok(())
 }   
@@ -162,7 +243,7 @@ fn print_progress_file(
 fn collect_files(
     dir: &Path,
     map: &mut HashMap<u64, Vec<PathBuf>>,
-    count: &mut usize,
+    processed: &AtomicUsize,
 ) -> io::Result<()> {
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
@@ -175,10 +256,9 @@ fn collect_files(
             }
 
             if path.is_dir() {
-                collect_files(&path, map, count)?;
+                collect_files(&path, map, processed)?;
             } else {
-                *count += 1;
-                println!("Processando: {} (Total: {})", path.display(), count);
+                processed.fetch_add(1, Ordering::Relaxed);
                 let metadata = entry.metadata()?;
                 map.entry(metadata.len()).or_default().push(path);
             }
