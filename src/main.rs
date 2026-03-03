@@ -175,7 +175,7 @@ fn print_progress(
     quiet: bool,
 ) -> io::Result<()> {
     // 3. Gera o relatório
-    println!("Relatório de Arquivos Duplicados");
+    println!("\nRelatório de Arquivos Duplicados");
     println!("================================");
 
     for (i, (size, group)) in duplicates.iter().enumerate() {
