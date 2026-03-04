@@ -41,6 +41,10 @@ struct Args {
     /// Não exibe spinner nem mensagens auxiliares no terminal (-q / --quiet)
     #[arg(short, long, default_value_t = false)]
     quiet: bool,
+
+    /// Ignora arquivos com 0 bytes (-z / --zero)
+    #[arg(short, long, default_value_t = false)]
+    zero: bool,
 }
 
 struct SpinnerGuard {
@@ -127,7 +131,7 @@ fn main() -> io::Result<()> {
         ))
     };
 
-    collect_files(&start_path, &mut files_by_size, &processed)?;
+    collect_files(&start_path, &mut files_by_size, &processed, args.zero)?;
 
     // 2. Verifica conteúdo para arquivos com mesmo tamanho
     let mut duplicates: Vec<(u64, Vec<PathBuf>)> = Vec::new();
@@ -244,6 +248,7 @@ fn collect_files(
     dir: &Path,
     map: &mut HashMap<u64, Vec<PathBuf>>,
     processed: &AtomicUsize,
+    zero: bool,
 ) -> io::Result<()> {
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
@@ -256,10 +261,14 @@ fn collect_files(
             }
 
             if path.is_dir() {
-                collect_files(&path, map, processed)?;
+                collect_files(&path, map, processed, zero)?;
             } else {
-                processed.fetch_add(1, Ordering::Relaxed);
                 let metadata = entry.metadata()?;
+                if zero && metadata.len() == 0 {
+                    continue;
+                }
+
+                processed.fetch_add(1, Ordering::Relaxed);
                 map.entry(metadata.len()).or_default().push(path);
             }
         }
