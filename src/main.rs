@@ -35,7 +35,7 @@ struct Args {
     size: String,
 
     /// Salva o relatório em um arquivo (-f <nome_do_arquivo> ou --file <nome_do_arquivo>)
-    #[arg(short, long)]
+    #[arg(short, long = "file")]
     filename: Option<String>,
 
     /// Não exibe spinner nem mensagens auxiliares no terminal (-q / --quiet)
