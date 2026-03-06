@@ -8,7 +8,7 @@ use std::sync::{
     Arc,
 };
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 // Apagar se retirar a verificação de hash ou implementar BD.
 //use sha2::{Digest, Sha256};
@@ -45,6 +45,14 @@ struct Args {
     /// Ignora arquivos com 0 bytes (-z / --zero)
     #[arg(short, long, default_value_t = false)]
     zero: bool,
+
+    /// Modo rápido: compara os primeiros N KB antes da comparação integral (-r [KB] ou --rapid [KB]; padrão 16)
+    #[arg(short, long, num_args = 0..=1, default_missing_value = "16", value_name = "KB")]
+    rapid: Option<u32>,
+
+    /// Exibe o tempo total de processamento (-t / --time)
+    #[arg(short, long, default_value_t = false)]
+    time: bool,
 }
 
 struct SpinnerGuard {
@@ -97,8 +105,34 @@ impl Drop for SpinnerGuard {
     }
 }
 
+struct TimeGuard {
+    start: Instant,
+    show: bool,
+}
+
+impl Drop for TimeGuard {
+    fn drop(&mut self) {
+        if self.show {
+            let elapsed = self.start.elapsed();
+            let s = elapsed.as_secs();
+            let h = s / 3600;
+            let m = (s % 3600) / 60;
+            let sec = s % 60;
+            let nanos = elapsed.subsec_nanos();
+            println!(
+                "Tempo de processamento: {:02}:{:02}:{:02}.{:09}",
+                h, m, sec, nanos
+            );
+        }
+    }
+}
+
 fn main() -> io::Result<()> {
     let args = Args::parse();
+    let _time_guard = TimeGuard {
+        start: Instant::now(),
+        show: args.time,
+    };
 
     let size_type_arg = args.size.to_lowercase();
     let (size_limit, size_suffix) = match size_type_arg.as_str() {
@@ -139,10 +173,23 @@ fn main() -> io::Result<()> {
 
     for (size, paths) in files_by_size {
         if paths.len() > 1 {
-            let groups = group_identical_files(paths)?;
-            for group in groups {
-                if group.len() > 1 {
-                    duplicates.push((size, group));
+            let path_lists: Vec<Vec<PathBuf>> = if let Some(kb) = args.rapid {
+                let prefix_bytes = (kb as usize) * 1024;
+                let mut by_prefix: HashMap<Vec<u8>, Vec<PathBuf>> = HashMap::new();
+                for path in paths {
+                    let prefix = read_file_prefix(&path, prefix_bytes).unwrap_or_default();
+                    by_prefix.entry(prefix).or_default().push(path);
+                }
+                by_prefix.into_values().filter(|v| v.len() > 1).collect()
+            } else {
+                vec![paths]
+            };
+            for path_list in path_lists {
+                let groups = group_identical_files(path_list)?;
+                for group in groups {
+                    if group.len() > 1 {
+                        duplicates.push((size, group));
+                    }
                 }
             }
         }
@@ -274,6 +321,16 @@ fn collect_files(
         }
     }
     Ok(())
+}
+
+/// Lê os primeiros `max_bytes` do arquivo (ou menos se o arquivo for menor).
+fn read_file_prefix(path: &Path, max_bytes: usize) -> io::Result<Vec<u8>> {
+    let f = File::open(path)?;
+    let mut r = BufReader::new(f);
+    let mut buf = vec![0u8; max_bytes];
+    let n = r.read(&mut buf)?;
+    buf.truncate(n);
+    Ok(buf)
 }
 
 fn group_identical_files(paths: Vec<PathBuf>) -> io::Result<Vec<Vec<PathBuf>>> {
