@@ -1,6 +1,119 @@
 # rfdupes 🦀
+> A fast and multithreaded implementation of **fdupes** written in Rust.
 
 > Uma implementação veloz e multithreaded do **fdupes** escrita em Rust.
+
+<div align="justify">
+
+<details title="English" align='left'>
+<summary align='left'>:uk: English</summary>
+<br>
+
+**rfdupes** is a command-line utility for locating and identifying
+duplicate files within a directory tree. It provides size filters, fast
+comparison modes, and detailed reports, leveraging the safety and
+performance of the Rust language.
+
+## ✨ Features
+
+-   **🚀 High Performance:** Written in Rust, with efficient processing.
+-   **🧵 Multithreading:** Uses threads to display visual feedback
+    (spinner) while processing.
+-   **🔍 Smart Comparison:**
+    -   Initial comparison by file size.
+    -   **Rapid Mode (`--rapid`):** Compares prefixes (e.g., first 16KB)
+        before reading the entire file.
+    -   Full byte-by-byte comparison for final confirmation.
+-   **🎚️ Search Filters:**
+    -   Filter by maximum (`-L`) and minimum (`-G`) file size.
+    -   Ignore empty files (`-z`).
+-   **📊 Flexible Reports:**
+    -   Display in Bytes, KB, or MB.
+    -   Direct export to a text file (`--file`).
+    -   Shows total execution time.
+
+## 📦 Installation
+
+### Prerequisites
+
+You need to have Rust and Cargo installed.
+
+``` bash
+# Clone the repository
+git clone https://github.com/seu-usuario/rfdupes.git
+
+# Enter the directory
+cd rfdupes
+
+# Build and install
+cargo install --path .
+```
+
+## 🛠️ How to Use
+
+The simplest way to run it is by pointing to a directory:
+
+``` bash
+rfdupes /path/to/analyze
+```
+
+### Common Examples
+
+**1. Filter large files (between 100MB and 1GB):** The `-s` parameter
+defines the unit (MB by default) used by the `-G` and `-L` filters.
+
+``` bash
+rfdupes -s M -G 100 -L 1000 /my/files
+```
+
+**2. Save the report to a file (no terminal output):** Useful for logs
+or later analysis.
+
+``` bash
+rfdupes --quiet --file duplicates.txt .
+```
+
+**3. Rapid Mode:** Groups files by comparing only the first 4KB (default
+is 16KB) before full verification, speeding up searches when files are
+large and differ early.
+
+``` bash
+rfdupes --rapid 4 .
+```
+
+### ⚙️ Options (Flags)
+
+| Short flag | Long flag | Description |
+| :--- | :--- | :--- |
+| `-s` | `--size` | Defines the size unit: `B` (Bytes), `K` (KB), `M` (MB). Default: `M`. |
+| `-L` | `--max-size` | **Maximum** file size (respects the `-s` unit). |
+| `-G` | `--min-size` | **Minimum** file size (respects the `-s` unit). |
+| `-z` | `--zero` | Ignores 0-byte (empty) files. |
+| `-r` | `--rapid` | Rapid mode: compares the first N KB (default 16KB). |
+| `-f` | `--file` | Saves the result to a specified text file. |
+| `-q` | `--quiet` | Quiet mode: does not display spinner or progress in the terminal. |
+| `-t` | `--time` | Displays the total processing time at the end. |
+| `-h` | `--help` | Displays help information. |
+
+
+### 🤝 Contributing
+
+Contributions are welcome! Feel free to open **issues** or submit **pull
+requests**.
+
+1.  Fork the project
+2.  Create your Feature Branch (`git checkout -b feature/MyFeature`)
+3.  Commit your changes (`git commit -m 'Add MyFeature'`)
+4.  Push to the Branch (`git push origin feature/MyFeature`)
+5.  Open a Pull Request
+
+<hr>
+
+</details>
+
+<details title="Português" align='left'>
+<summary align='left'>:brazil: Português</summary>
+<br>
 
 O **rfdupes** é um utilitário de linha de comando para localizar e identificar arquivos duplicados dentro de uma árvore de diretórios. Ele oferece filtros de tamanho, modos de comparação rápida e relatórios detalhados, aproveitando a segurança e performance da linguagem Rust.
 
@@ -90,3 +203,7 @@ Contribuições são bem-vindas! Sinta-se à vontade para abrir **issues** ou en
 3. Commit suas mudanças (`git commit -m 'Adiciona MinhaFeature'`)
 4. Push para a Branch (`git push origin feature/MinhaFeature`)
 5. Abra um Pull Request
+
+</details>
+
+</div>
