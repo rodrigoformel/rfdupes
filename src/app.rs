@@ -52,6 +52,14 @@ pub struct Args {
     /// Exibe o tempo total de processamento (-t / --time)
     #[arg(short, long, default_value_t = false)]
     pub time: bool,
+
+    /// Tamanho máximo dos arquivos a serem comparados (-L ou --max-size [B, KB ou MB de acordo com o parâmetro -s]))
+    #[arg(short = 'L', long)]
+    pub max_size: Option<u64>,
+
+    /// Tamanho mínimo dos arquivos a serem comparados (-G ou --min-size [B, KB ou MB de acordo com o parâmetro -s]))
+    #[arg(short = 'G', long)]
+    pub min_size: Option<u64>,
 }
 
 /// Exibe o tempo decorrido ao sair do escopo, se habilitado.
@@ -166,7 +174,10 @@ pub fn run(args: &Args) -> io::Result<()> {
         ))
     };
 
-    collect_files(&start_path, &mut files_by_size, &processed, args.zero)?;
+    let min_bytes = args.min_size.map(|s| s * size_limit);
+    let max_bytes = args.max_size.map(|s| s * size_limit);
+
+    collect_files(&start_path, &mut files_by_size, &processed, args.zero, min_bytes, max_bytes)?;
 
     let mut duplicates: Vec<(u64, Vec<PathBuf>)> = Vec::new();
     phase.store(1, Ordering::Relaxed);
@@ -288,6 +299,8 @@ fn collect_files(
     map: &mut HashMap<u64, Vec<PathBuf>>,
     processed: &AtomicUsize,
     zero: bool,
+    min_len: Option<u64>,
+    max_len: Option<u64>,
 ) -> io::Result<()> {
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
@@ -299,15 +312,22 @@ fn collect_files(
             }
 
             if path.is_dir() {
-                collect_files(&path, map, processed, zero)?;
+                collect_files(&path, map, processed, zero, min_len, max_len)?;
             } else {
                 let metadata = entry.metadata()?;
-                if zero && metadata.len() == 0 {
+                let len = metadata.len();
+                if zero && len == 0 {
                     continue;
+                }
+                if let Some(min) = min_len {
+                    if len < min { continue; }
+                }
+                if let Some(max) = max_len {
+                    if len > max { continue; }
                 }
 
                 processed.fetch_add(1, Ordering::Relaxed);
-                map.entry(metadata.len()).or_default().push(path);
+                map.entry(len).or_default().push(path);
             }
         }
     }
