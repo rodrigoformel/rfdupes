@@ -90,6 +90,7 @@ rfdupes --rapid 4 .
 | `-G` | `--min-size` | **Minimum** file size (respects the `-s` unit). |
 | `-z` | `--zero` | Ignores 0-byte (empty) files. |
 | `-r` | `--rapid` | Rapid mode: compares the first N KB (default 16KB). |
+| `-R` | `--recursive` | Recursively descends into directories. |
 | `-f` | `--file` | Saves the result to a specified text file. |
 | `-q` | `--quiet` | Quiet mode: does not display spinner or progress in the terminal. |
 | `-t` | `--time` | Displays the total processing time at the end. |
@@ -189,6 +190,7 @@ rfdupes --rapid 4 .
 | `-G` | `--min-size` | Tamanho **mínimo** do arquivo (respeita a unidade de `-s`). |
 | `-z` | `--zero` | Ignora arquivos de 0 bytes (vazios). |
 | `-r` | `--rapid` | Modo rápido: compara os primeiros N KB (padrão 16KB). |
+| `-R` | `--recursive` | Desce recursivamente em diretórios. |
 | `-f` | `--file` | Salva o resultado em um arquivo de texto especificado. |
 | `-q` | `--quiet` | Modo silencioso: não exibe spinner ou progresso no terminal. |
 | `-t` | `--time` | Exibe o tempo total de processamento ao final. |

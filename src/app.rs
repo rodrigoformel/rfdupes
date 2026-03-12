@@ -49,6 +49,10 @@ pub struct Args {
     #[arg(short, long, num_args = 0..=1, default_missing_value = "16", value_name = "KB")]
     pub rapid: Option<u32>,
 
+    /// Recursive, desce a árvore de diretórios para comparar os arquivos(-R / --recursive)
+    #[arg(short = 'R', long, default_value_t = false)]
+    pub recursive: bool,
+
     /// Exibe o tempo total de processamento (-t / --time)
     #[arg(short, long, default_value_t = false)]
     pub time: bool,
@@ -177,7 +181,12 @@ pub fn run(args: &Args) -> io::Result<()> {
     let min_bytes = args.min_size.map(|s| s * size_limit);
     let max_bytes = args.max_size.map(|s| s * size_limit);
 
-    collect_files(&start_path, &mut files_by_size, &processed, args.zero, min_bytes, max_bytes)?;
+    collect_files(&start_path, 
+        &mut files_by_size, 
+        &processed, args.zero, 
+        min_bytes, 
+        max_bytes, 
+        args.recursive)?;
 
     let mut duplicates: Vec<(u64, Vec<PathBuf>)> = Vec::new();
     phase.store(1, Ordering::Relaxed);
@@ -301,6 +310,7 @@ fn collect_files(
     zero: bool,
     min_len: Option<u64>,
     max_len: Option<u64>,
+    recursive: bool,
 ) -> io::Result<()> {
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
@@ -310,9 +320,12 @@ fn collect_files(
             if entry.file_type()?.is_symlink() {
                 continue;
             }
+            //println!("Processando: {}", path.display());
 
             if path.is_dir() {
-                collect_files(&path, map, processed, zero, min_len, max_len)?;
+                if recursive {
+                    collect_files(&path, map, processed, zero, min_len, max_len, recursive)?;
+                }
             } else {
                 let metadata = entry.metadata()?;
                 let len = metadata.len();
